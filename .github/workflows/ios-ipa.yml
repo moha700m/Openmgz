@@ -1,0 +1,299 @@
+name: ios-ipa
+
+run-name: "openmgz ${{ inputs.build_id }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        description: Openmgz build id
+        required: true
+        type: string
+      branch:
+        description: Branch that contains the generated project
+        required: true
+        type: string
+      project_path:
+        description: Path to the Xcode project (or source) inside the repo
+        required: true
+        type: string
+      strategy:
+        description: xcode-build | flutter-build | rn-build | capacitor-build | capacitor-add | web-wrapper
+        required: true
+        type: string
+      app_name:
+        required: true
+        type: string
+      bundle_id:
+        required: true
+        type: string
+      version:
+        required: false
+        default: "1.0"
+        type: string
+      scheme:
+        required: false
+        default: ""
+        type: string
+      build_command:
+        required: false
+        default: ""
+        type: string
+      output_dir:
+        required: false
+        default: ""
+        type: string
+      manifest_path:
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: openmgz-${{ inputs.build_id }}
+  cancel-in-progress: false
+
+jobs:
+  ipa:
+    name: Build unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      PROJECT_PATH: ${{ inputs.project_path }}
+      STRATEGY: ${{ inputs.strategy }}
+      APP_NAME: ${{ inputs.app_name }}
+      BUNDLE_ID: ${{ inputs.bundle_id }}
+      VERSION: ${{ inputs.version }}
+      SCHEME: ${{ inputs.scheme }}
+      BUILD_COMMAND: ${{ inputs.build_command }}
+      OUTPUT_DIR: ${{ inputs.output_dir }}
+      BUILD_ID: ${{ inputs.build_id }}
+      WORK: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout build branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 1
+
+      - name: Toolchain report
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcode-select -p
+          sw_vers
+
+      - name: Set up Node
+        if: inputs.strategy == 'web-wrapper' || inputs.strategy == 'rn-build' || inputs.strategy == 'capacitor-build' || inputs.strategy == 'capacitor-add'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Show manifest
+        run: |
+          set -euo pipefail
+          echo "build=$BUILD_ID strategy=$STRATEGY path=$PROJECT_PATH"
+          if [ -n "${{ inputs.manifest_path }}" ] && [ -f "${{ inputs.manifest_path }}" ]; then
+            cat "${{ inputs.manifest_path }}"
+          fi
+
+      # ---------------- web bundle ----------------
+      - name: Build web bundle into the iOS shell
+        if: inputs.strategy == 'web-wrapper' && inputs.build_command != ''
+        working-directory: ${{ inputs.project_path }}
+        run: |
+          set -euo pipefail
+          if [ -f pnpm-lock.yaml ]; then
+            corepack enable
+            pnpm install --frozen-lockfile || pnpm install
+          elif [ -f yarn.lock ]; then
+            corepack enable
+            yarn install --frozen-lockfile || yarn install
+          else
+            npm ci || npm install
+          fi
+          eval "$BUILD_COMMAND"
+          OUT="${OUTPUT_DIR:-dist}"
+          if [ ! -d "$OUT" ]; then
+            echo "::error::Build output directory '$OUT' does not exist."
+            exit 1
+          fi
+          rm -rf App/www
+          mkdir -p App/www
+          cp -R "$OUT"/. App/www/
+          echo "Bundled $(find App/www -type f | wc -l | tr -d ' ') files from $OUT"
+
+      # ---------------- capacitor ----------------
+      - name: Add Capacitor iOS platform
+        if: inputs.strategy == 'capacitor-add'
+        working-directory: ${{ inputs.project_path }}
+        run: |
+          set -euo pipefail
+          npm ci || npm install
+          npx cap add ios
+          npx cap sync ios
+
+      - name: Install CocoaPods dependencies
+        if: inputs.strategy == 'rn-build' || inputs.strategy == 'capacitor-build' || inputs.strategy == 'capacitor-add' || (inputs.strategy == 'xcode-build' && hashFiles(format('{0}/Podfile', inputs.project_path)) != '')
+        working-directory: ${{ inputs.project_path }}
+        run: |
+          set -euo pipefail
+          if [ -f ios/Podfile ]; then cd ios; fi
+          if [ -f Podfile ]; then
+            bundle install || true
+            pod install --repo-update
+          fi
+
+      - name: Install project dependencies (React Native)
+        if: inputs.strategy == 'rn-build'
+        working-directory: ${{ inputs.project_path }}
+        run: |
+          set -euo pipefail
+          npm ci || npm install
+
+      # ---------------- flutter ----------------
+      - name: Set up Flutter
+        if: inputs.strategy == 'flutter-build'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build Flutter app
+        if: inputs.strategy == 'flutter-build'
+        working-directory: ${{ inputs.project_path }}
+        run: |
+          set -euo pipefail
+          flutter --version
+          if [ ! -d ios ]; then flutter create --platforms=ios . ; fi
+          flutter pub get
+          flutter build ios --release --no-codesign
+
+      # ---------------- xcodegen ----------------
+      - name: Install XcodeGen
+        if: inputs.strategy == 'web-wrapper' || hashFiles(format('{0}/project.yml', inputs.project_path)) != ''
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        if: inputs.strategy == 'web-wrapper' || hashFiles(format('{0}/project.yml', inputs.project_path)) != ''
+        working-directory: ${{ inputs.project_path }}
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          ls -d *.xcodeproj
+
+      # ---------------- xcode build ----------------
+      - name: Resolve scheme and project
+        if: inputs.strategy != 'flutter-build'
+        working-directory: ${{ inputs.project_path }}
+        run: |
+          set -euo pipefail
+          WORKSPACE=$(find . -maxdepth 2 -name "*.xcworkspace" -not -path "*/project.xcworkspace/*" | head -1 || true)
+          PROJECT=$(find . -maxdepth 2 -name "*.xcodeproj" | head -1 || true)
+          if [ -z "${SCHEME:-}" ]; then
+            if [ -n "$WORKSPACE" ]; then
+              SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+            elif [ -n "$PROJECT" ]; then
+              SCHEME=$(basename "$PROJECT" .xcodeproj)
+            else
+              echo "::error::No Xcode project or workspace found in $PROJECT_PATH"
+              exit 1
+            fi
+          fi
+          if [ -z "$WORKSPACE" ] && [ -z "$PROJECT" ]; then
+            echo "::error::Nothing to build."
+            exit 1
+          fi
+          echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
+          echo "XCWORKSPACE=$WORKSPACE" >> "$GITHUB_ENV"
+          echo "XCPROJECT=$PROJECT" >> "$GITHUB_ENV"
+          xcodebuild -list -project "$PROJECT" 2>/dev/null || xcodebuild -list -workspace "$WORKSPACE" || true
+
+      - name: xcodebuild (unsigned)
+        if: inputs.strategy != 'flutter-build'
+        working-directory: ${{ inputs.project_path }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/dd"
+          TARGET_FLAG="-project"
+          TARGET="${XCPROJECT}"
+          if [ -n "${XCWORKSPACE}" ]; then TARGET_FLAG="-workspace"; TARGET="${XCWORKSPACE}"; fi
+
+          set -o pipefail
+          xcodebuild \
+            $TARGET_FLAG "$TARGET" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            -archivePath "$RUNNER_TEMP/app.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION=1 \
+            build 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      # ---------------- package ----------------
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          APP=""
+          if [ -d "dd/Build/Products/Release-iphoneos" ]; then
+            APP=$(find "dd/Build/Products/Release-iphoneos" -maxdepth 1 -name "*.app" | head -1 || true)
+          fi
+          if [ -z "$APP" ] && [ -d "$WORK/$PROJECT_PATH/build/ios/iphoneos" ]; then
+            APP=$(find "$WORK/$PROJECT_PATH/build/ios/iphoneos" -maxdepth 1 -name "*.app" | head -1 || true)
+          fi
+          if [ -z "$APP" ]; then
+            echo "::error::No .app bundle was produced."
+            find "$WORK" -name "*.app" -maxdepth 6 || true
+            exit 1
+          fi
+          echo "Packaging $APP"
+          rm -rf Payload "app.ipa"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          /usr/bin/zip -qry "app.ipa" Payload
+          ls -lh "app.ipa"
+          unzip -l "app.ipa" | head -20
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa-${{ inputs.build_id }}
+          path: ${{ runner.temp }}/app.ipa
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ inputs.build_id }}
+          path: |
+            ${{ runner.temp }}/build.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Openmgz build \`$BUILD_ID\`"
+            echo ""
+            echo "| field | value |"
+            echo "|---|---|"
+            echo "| strategy | $STRATEGY |"
+            echo "| app | $APP_NAME |"
+            echo "| bundle id | $BUNDLE_ID |"
+            echo "| project | $PROJECT_PATH |"
+            echo "| signing | **unsigned** (sign with ESign) |"
+          } >> "$GITHUB_STEP_SUMMARY"

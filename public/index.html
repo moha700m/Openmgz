@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+    <meta name="theme-color" content="#07070c" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Openmgz" />
+    <title>Openmgz — IPA Factory</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="mesh" aria-hidden="true"></div>
+
+    <aside class="sidebar">
+      <a class="brand" href="#/home">
+        <span class="brand-mark">◆</span>
+        <span class="brand-text">
+          <strong>Openmgz</strong>
+          <small data-i18n="brand.tag">IPA Factory</small>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="#/home" data-nav="home"><span>⌂</span><em data-i18n="nav.home">Home</em></a>
+        <a href="#/projects" data-nav="projects"><span>▤</span><em data-i18n="nav.projects">Projects</em></a>
+        <a href="#/builds" data-nav="builds"><span>⚙</span><em data-i18n="nav.builds">Builds</em></a>
+        <a href="#/settings" data-nav="settings"><span>◎</span><em data-i18n="nav.settings">Settings</em></a>
+      </nav>
+      <div class="sidebar-foot">
+        <button id="themeToggle" class="icon-btn" title="Theme">◐</button>
+        <button id="langToggle" class="icon-btn" title="Language">EN</button>
+        <span id="repoBadge" class="repo-badge mono">…</span>
+      </div>
+    </aside>
+
+    <main id="app" class="app"></main>
+
+    <nav class="tabbar">
+      <a href="#/home" data-nav="home"><span>⌂</span><em data-i18n="nav.home">Home</em></a>
+      <a href="#/projects" data-nav="projects"><span>▤</span><em data-i18n="nav.projects">Projects</em></a>
+      <button id="uploadFab" class="fab" aria-label="Upload">＋</button>
+      <a href="#/builds" data-nav="builds"><span>⚙</span><em data-i18n="nav.builds">Builds</em></a>
+      <a href="#/settings" data-nav="settings"><span>◎</span><em data-i18n="nav.settings">Settings</em></a>
+    </nav>
+
+    <div id="sheetBackdrop" class="backdrop hidden"></div>
+    <section id="sheet" class="sheet hidden" role="dialog" aria-modal="true"></section>
+    <div id="toasts" class="toasts"></div>
+
+    <input id="filePicker" type="file" accept=".tar.gz,.tgz,.tar,application/gzip" hidden />
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

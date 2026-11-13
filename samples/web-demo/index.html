@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>تمرين</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <span class="dot"></span>
+      <h1>تمرين</h1>
+      <p>تتبّع عاداتك اليومية.</p>
+    </header>
+    <main>
+      <section class="ring-wrap">
+        <svg viewBox="0 0 120 120" class="ring">
+          <circle cx="60" cy="60" r="52" class="track" />
+          <circle cx="60" cy="60" r="52" class="value" id="ring" />
+        </svg>
+        <div class="ring-label"><strong id="pct">0%</strong><span>اليوم</span></div>
+      </section>
+      <ul id="list" class="list"></ul>
+      <form id="form">
+        <input id="input" placeholder="أضف عادة…" autocomplete="off" />
+        <button type="submit">＋</button>
+      </form>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
