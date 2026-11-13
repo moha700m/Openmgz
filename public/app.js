@@ -790,21 +790,11 @@ document.addEventListener('click', async (e) => {
     }
     if (action === 'load-logs') return loadLogs(id);
     if (action === 'reload') return render();
-    if (action === 'toggle-theme') {
-      state.theme = state.theme === 'dark' ? 'light' : 'dark';
-      localStorage.setItem('omgz.theme', state.theme);
-      applyPrefs();
-      return render();
-    }
     if (action === 'toggle-lang') {
       state.lang = state.lang === 'ar' ? 'en' : 'ar';
       localStorage.setItem('omgz.lang', state.lang);
       applyPrefs();
       return render();
-    }
-    if (action === 'allow-public') {
-      const checked = e.target.checked;
-      return togglePublic(state.project.id, checked);
     }
     if (action === 'refresh-preview') {
       const frame = $('.phone iframe');

@@ -8,6 +8,7 @@ so, names the reason, and the build button stays disabled.
 | Project | Detected by | Strategy | Result |
 |---|---|---|---|
 | Swift / SwiftUI / UIKit (`.xcodeproj`) | Xcode project + schemes | `xcode-build` | Built as-is; no rewriting |
+| XcodeGen project (`project.yml`) | spec + Swift sources | `xcode-build` | `xcodegen generate` in CI, then archive |
 | Swift Package only (`Package.swift`) | no `.xcodeproj` | unsupported | Needs an app target |
 | Flutter (`pubspec.yaml`) | Flutter dependency | `flutter-build` | `flutter build ios --no-codesign` |
 | React Native / Expo **with `ios/`** | `package.json` deps | `rn-build` | Pods + Xcode workspace |

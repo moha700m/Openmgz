@@ -88,6 +88,10 @@ src/builds.mjs        آلة الحالة: push → dispatch → poll → أرش
 node tests/run.mjs
 ```
 
+**نتائج حقيقية:** بناءان ناجحان على runners ماك فعلية — [IPA لتطبيق ويب](docs/testing.md)
+(131 KB، يحتوي `www/` داخل الحزمة) و[IPA لتطبيق SwiftUI](docs/testing.md) (18 KB) — كلاهما غير موقّع
+وبنيته صحيحة (`Payload/App.app` + Mach-O arm64). التفاصيل في [`docs/testing.md`](docs/testing.md).
+
 تغطّي: أمان استخراج الأرشيف (15 حالة)، تحليل 10 أنواع مشاريع، توليد مشروع iOS، ودورة الخادم
 كاملة (رفع → تحليل → معاينة → توليد → منع البناء بدون توكن → حذف).
 
