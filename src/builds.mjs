@@ -124,8 +124,11 @@ export async function startBuild(project, options = {}) {
   let projectPath;
   if (generated.generated) {
     projectPath = `${buildPath}/ios`;
+    // generated.files are relative to the build directory and already start
+    // with "ios/", so they are pushed under builds/<id>/ and the Xcode project
+    // lives at builds/<id>/ios.
     for (const rel of generated.files) {
-      files.push({ path: `${projectPath}/${rel}`, content: fs.readFileSync(path.join(dir, rel)) });
+      files.push({ path: `${buildPath}/${rel}`, content: fs.readFileSync(path.join(dir, rel)) });
     }
   } else {
     projectPath = `${buildPath}/src`;

@@ -41,6 +41,7 @@ struct OpenmgzApp: App {
 `;
 
 const SWIFT_VIEW = `import SwiftUI
+import UIKit
 import WebKit
 
 /// Native shell that hosts the bundled web build. Everything ships inside the
