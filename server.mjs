@@ -1,3 +1,10 @@
+const NODE_MAJOR = Number(process.versions.node.split('.')[0]);
+if (NODE_MAJOR < 20) {
+  console.error(`Openmgz needs Node.js 20 or newer. You are running ${process.version}.`);
+  console.error('Download it from https://nodejs.org and run start.command / start.bat again.');
+  process.exit(1);
+}
+
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
