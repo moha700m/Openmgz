@@ -22,7 +22,7 @@ import {
   removeProject,
   save,
 } from './src/store.mjs';
-import { extractTar } from './src/untar.mjs';
+import { extractArchive } from './src/untar.mjs';
 import { analyzeProject, publicAnalysis } from './src/analyzer.mjs';
 import { generateIosProject, listFiles, sanitizeSettings } from './src/generator.mjs';
 import { buildLogs, ipaPath, onBuildEvent, publicBuild, startBuild, startPoller, tick } from './src/builds.mjs';
@@ -206,13 +206,13 @@ const server = http.createServer(async (req, res) => {
         const size = await saveUpload(req, archive);
         if (!size) {
           fs.rmSync(dir, { recursive: true, force: true });
-          return json(res, 400, { error: 'Empty upload. Send the .tar.gz as the raw request body.' });
+          return json(res, 400, { error: 'Empty upload. Send the .tar.gz or .zip as the raw request body.' });
         }
 
         const srcDir = path.join(dir, 'src');
         let extraction;
         try {
-          extraction = extractTar(fs.readFileSync(archive), srcDir);
+          extraction = extractArchive(fs.readFileSync(archive), srcDir);
         } catch (err) {
           fs.rmSync(dir, { recursive: true, force: true });
           return json(res, 400, { error: `Could not extract archive: ${err.message}` });

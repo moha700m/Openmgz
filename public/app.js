@@ -52,7 +52,7 @@ const I18N = {
     'settings.workflow': 'ملف الـ workflow',
     'settings.prefs': 'التفضيلات', 'settings.theme': 'المظهر', 'settings.dark': 'داكن', 'settings.light': 'فاتح',
     'settings.lang': 'اللغة',
-    'upload.title': 'ارفع مشروعًا', 'upload.drop': 'اختر ملف .tar.gz أو اسحبه هنا',
+    'upload.title': 'ارفع مشروعًا', 'upload.drop': 'اختر ملف .tar.gz أو .zip أو اسحبه هنا',
     'upload.hint': 'حد أقصى {mb} ميجابايت · يُستخرج محليًا ولا يُرسل لأي خدمة.',
     'upload.name': 'اسم المشروع (اختياري)', 'upload.namePh': 'مثال: متجر الجوال',
     'upload.start': 'حلّل المشروع', 'upload.analyzing': 'جارٍ الاستخراج والتحليل…', 'upload.uploading': 'جارٍ الرفع…',
@@ -109,7 +109,7 @@ const I18N = {
     'settings.workflow': 'Workflow file',
     'settings.prefs': 'Preferences', 'settings.theme': 'Theme', 'settings.dark': 'Dark', 'settings.light': 'Light',
     'settings.lang': 'Language',
-    'upload.title': 'Upload a project', 'upload.drop': 'Choose a .tar.gz or drop it here',
+    'upload.title': 'Upload a project', 'upload.drop': 'Choose a .tar.gz or .zip, or drop it here',
     'upload.hint': 'Max {mb} MB · extracted locally, never sent to a third party.',
     'upload.name': 'Project name (optional)', 'upload.namePh': 'e.g. Mobile Store',
     'upload.start': 'Analyze project', 'upload.analyzing': 'Extracting and analyzing…', 'upload.uploading': 'Uploading…',
@@ -613,7 +613,7 @@ async function startUpload() {
 
   const xhr = new XMLHttpRequest();
   xhr.open('POST', `/api/projects?name=${encodeURIComponent(name)}`);
-  xhr.setRequestHeader('content-type', 'application/gzip');
+  xhr.setRequestHeader('content-type', 'application/octet-stream');
   xhr.upload.onprogress = (e) => {
     if (e.lengthComputable) {
       const pct = Math.min(99, Math.round((e.loaded / e.total) * 100));

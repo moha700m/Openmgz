@@ -1,5 +1,5 @@
 /**
- * Dependency-free tar / tar.gz extractor with hard safety limits.
+ * Dependency-free tar / tar.gz / zip extractor with hard safety limits.
  * Rejects absolute paths, `..` segments, symlinks, hardlinks and devices,
  * caps entry count and total bytes, and strips a single wrapper directory.
  */
@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { config } from './config.mjs';
+import { readZip } from './zip.mjs';
 
 const BLOCK = 512;
 
@@ -24,9 +25,8 @@ const octal = (buf, start, len) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-function isGzip(buf) {
-  return buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b;
-}
+const isGzip = (buf) => buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b;
+const isZip = (buf) => buf.length > 4 && buf[0] === 0x50 && buf[1] === 0x4b;
 
 function checksumOk(header) {
   let sum = 0;
@@ -65,6 +65,48 @@ function safeName(raw) {
   return segments.join('/');
 }
 
+/** Write parsed entries with identical safety rules for tar and zip. */
+function writeEntries(entries, dest, maxBytes) {
+  const firsts = new Set(entries.map((e) => e.name.split('/')[0]));
+  let root = null;
+  if (firsts.size === 1) {
+    const only = [...firsts][0];
+    const allNested = entries.every((e) => e.name === only || e.name.startsWith(`${only}/`));
+    const hasChildren = entries.some((e) => e.name.startsWith(`${only}/`));
+    if (allNested && hasChildren) root = only;
+  }
+
+  fs.mkdirSync(dest, { recursive: true });
+  const destResolved = path.resolve(dest);
+  let files = 0;
+  let written = 0;
+
+  for (const entry of entries) {
+    let rel = entry.name;
+    if (root) rel = rel.slice(root.length).replace(/^\//, '');
+    if (!rel) continue;
+
+    const resolved = path.resolve(dest, rel);
+    if (resolved !== destResolved && !resolved.startsWith(destResolved + path.sep)) {
+      throw new Error(`Refusing to write outside the project directory: ${rel}`);
+    }
+    if (written + (entry.size || 0) > maxBytes) {
+      throw new Error(`Archive expands beyond the ${Math.round(maxBytes / 1e6)} MB limit.`);
+    }
+
+    if (entry.dir) {
+      fs.mkdirSync(resolved, { recursive: true });
+      continue;
+    }
+    fs.mkdirSync(path.dirname(resolved), { recursive: true });
+    fs.writeFileSync(resolved, entry.data);
+    files++;
+    written += entry.size || 0;
+  }
+
+  return { files, bytes: written, root };
+}
+
 /**
  * @param {Buffer} buffer - raw .tar.gz or .tar contents
  * @param {string} dest - directory to extract into
@@ -90,7 +132,6 @@ export function extractTar(buffer, dest, options = {}) {
     const header = tar.subarray(offset, offset + BLOCK);
     if (header.every((b) => b === 0)) {
       offset += BLOCK;
-      // Two zero blocks end the archive; tolerate garbage after.
       if (offset + BLOCK > tar.length) break;
       const next = tar.subarray(offset, offset + BLOCK);
       if (next.every((b) => b === 0)) break;
@@ -148,43 +189,46 @@ export function extractTar(buffer, dest, options = {}) {
   }
 
   if (!entries.length) throw new Error('Archive has no files.');
+  return { ...writeEntries(entries, dest, maxBytes), skipped };
+}
 
-  // Strip one shared top-level directory (the usual "project/" wrapper).
-  const firsts = new Set(entries.map((e) => e.name.split('/')[0]));
-  let root = null;
-  if (firsts.size === 1) {
-    const only = [...firsts][0];
-    const allNested = entries.every((e) => e.name === only || e.name.startsWith(`${only}/`));
-    const hasChildren = entries.some((e) => e.name.startsWith(`${only}/`));
-    if (allNested && hasChildren) root = only;
-  }
+/** ZIP archives (macOS "Compress", GitHub downloads, most upload tools). */
+export function extractZip(buffer, dest, options = {}) {
+  const maxEntries = options.maxEntries || config.maxEntries;
+  const maxBytes = options.maxBytes || config.maxExtractedBytes;
 
-  fs.mkdirSync(dest, { recursive: true });
-  let files = 0;
-  let written = 0;
+  const raw = readZip(buffer);
+  if (!raw.length) throw new Error('Archive is empty.');
 
-  for (const entry of entries) {
-    let rel = entry.name;
-    if (root) rel = rel.slice(root.length).replace(/^\//, '');
-    if (!rel) continue;
+  const entries = [];
+  const skipped = [];
+  let total = 0;
 
-    const abs = path.join(dest, rel);
-    const resolved = path.resolve(abs);
-    if (resolved !== path.resolve(dest) && !resolved.startsWith(path.resolve(dest) + path.sep)) {
-      throw new Error(`Refusing to write outside the project directory: ${rel}`);
-    }
-
-    if (entry.dir) {
-      fs.mkdirSync(resolved, { recursive: true });
+  for (const entry of raw) {
+    if (entry.name.startsWith('__MACOSX/')) {
+      skipped.push(`${entry.name} (macOS metadata)`);
       continue;
     }
-    fs.mkdirSync(path.dirname(resolved), { recursive: true });
-    fs.writeFileSync(resolved, entry.data);
-    files++;
-    written += entry.size;
+    if (entry.name.includes('\u0000')) continue;
+
+    const clean = safeName(entry.name);
+    if (!clean) continue;
+    if (!entry.dir && clean.endsWith('.DS_Store')) continue;
+
+    total += entry.size || 0;
+    if (total > maxBytes) throw new Error(`Archive expands beyond the ${Math.round(maxBytes / 1e6)} MB limit.`);
+    if (entries.length >= maxEntries) throw new Error(`Archive has more than ${maxEntries} entries.`);
+
+    entries.push({ name: clean, dir: entry.dir, data: entry.data, size: entry.size });
   }
 
-  return { files, bytes: written, skipped, root };
+  if (!entries.length) throw new Error('Archive has no files.');
+  return { ...writeEntries(entries, dest, maxBytes), skipped };
+}
+
+/** Detect by magic bytes: PK = zip, 1f 8b = gzip, else assume tar. */
+export function extractArchive(buffer, dest, options = {}) {
+  return isZip(buffer) ? extractZip(buffer, dest, options) : extractTar(buffer, dest, options);
 }
 
 export function readArchive(file) {

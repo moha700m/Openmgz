@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-const files = ['tests/untar.test.mjs', 'tests/analyzer.test.mjs', 'tests/generator.test.mjs', 'tests/server.test.mjs'];
+const files = ['tests/untar.test.mjs', 'tests/zip.test.mjs', 'tests/analyzer.test.mjs', 'tests/generator.test.mjs', 'tests/server.test.mjs'];
 let failed = 0;
 
 for (const file of files) {
