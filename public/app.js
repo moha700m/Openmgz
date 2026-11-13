@@ -822,13 +822,11 @@ $('#filePicker').addEventListener('change', (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
   state.pickedFile = file;
-  const dz = $('#dropzone');
-  if (dz) dz.innerHTML = `<div class="icon">✓</div><div>${esc(file.name)}</div><div class="hint">${fmtBytes(file.size)}</div>`;
+    if (dz) dz.innerHTML = `<div class="icon">✓</div><div>${esc(file.name)}</div><div class="hint">${fmtBytes(file.size)}</div>`;
   const btn = $('#startUpload');
   if (btn) btn.disabled = false;
 });
 
-const dz = $('#dropzone');
 document.addEventListener('dragover', (e) => {
   if (!e.target.closest('#dropzone')) return;
   e.preventDefault();
