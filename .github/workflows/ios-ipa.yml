@@ -192,26 +192,40 @@ jobs:
         working-directory: ${{ inputs.project_path }}
         run: |
           set -euo pipefail
-          WORKSPACE=$(find . -maxdepth 2 -name "*.xcworkspace" -not -path "*/project.xcworkspace/*" | head -1 || true)
-          PROJECT=$(find . -maxdepth 2 -name "*.xcodeproj" | head -1 || true)
-          if [ -z "${SCHEME:-}" ]; then
-            if [ -n "$WORKSPACE" ]; then
-              SCHEME=$(basename "$WORKSPACE" .xcworkspace)
-            elif [ -n "$PROJECT" ]; then
-              SCHEME=$(basename "$PROJECT" .xcodeproj)
-            else
-              echo "::error::No Xcode project or workspace found in $PROJECT_PATH"
-              exit 1
-            fi
-          fi
+
+          # A generated .xcodeproj contains its own project.xcworkspace; never
+          # treat that as the build target.
+          WORKSPACE=$(find . -maxdepth 4 -name "*.xcworkspace" -not -path "*.xcodeproj/*" | head -1 || true)
+          PROJECT=$(find . -maxdepth 4 -name "*.xcodeproj" | head -1 || true)
+
           if [ -z "$WORKSPACE" ] && [ -z "$PROJECT" ]; then
-            echo "::error::Nothing to build."
+            echo "::error::No Xcode project or workspace found in $PROJECT_PATH"
+            find . -maxdepth 3 -type d | head -30
             exit 1
           fi
-          echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
-          echo "XCWORKSPACE=$WORKSPACE" >> "$GITHUB_ENV"
-          echo "XCPROJECT=$PROJECT" >> "$GITHUB_ENV"
-          xcodebuild -list -project "$PROJECT" 2>/dev/null || xcodebuild -list -workspace "$WORKSPACE" || true
+
+          FLAG="-project"
+          TARGET="$PROJECT"
+          if [ -n "$WORKSPACE" ]; then FLAG="-workspace"; TARGET="$WORKSPACE"; fi
+          echo "target=$TARGET"
+
+          LIST=$(xcodebuild -list -json $FLAG "$TARGET" 2>/dev/null || true)
+          if command -v jq >/dev/null 2>&1 && [ -n "$LIST" ]; then
+            FIRST=$(printf '%s' "$LIST" | jq -r '.workspace.schemes[0] // .project.schemes[0] // empty' 2>/dev/null || true)
+            HAS=$(printf '%s' "$LIST" | jq -r --arg s "${SCHEME:-}" '((.workspace.schemes // []) + (.project.schemes // [])) | index($s) // empty' 2>/dev/null || true)
+            if [ -z "${SCHEME:-}" ] || [ -z "$HAS" ]; then SCHEME="${FIRST:-}"; fi
+          fi
+          if [ -z "${SCHEME:-}" ]; then
+            SCHEME=$(basename "$TARGET")
+            SCHEME="${SCHEME%.*}"
+          fi
+          echo "scheme=$SCHEME"
+
+          {
+            echo "SCHEME=$SCHEME"
+            echo "XCWORKSPACE=$WORKSPACE"
+            echo "XCPROJECT=$PROJECT"
+          } >> "$GITHUB_ENV"
 
       - name: xcodebuild (unsigned)
         if: inputs.strategy != 'flutter-build'
