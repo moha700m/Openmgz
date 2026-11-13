@@ -33,13 +33,17 @@ if (cmd === 'start') {
   copyDir(path.join(ROOT, sample), path.join(dir, 'src'));
 
   const analysis = analyzeProject(path.join(dir, 'src'));
-  const settings = sanitizeSettings({ appName: 'Habit Demo', bundleId: 'com.openmgz.habitdemo' }, analysis);
+  const label = path.basename(sample).replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const settings = sanitizeSettings(
+    { appName: label, bundleId: `com.openmgz.${path.basename(sample).replace(/[^a-z0-9]/gi, '').toLowerCase()}` },
+    analysis,
+  );
   settings.allowPublicPush = true;
 
   const now = new Date().toISOString();
   const project = {
     id,
-    name: 'Habit Demo',
+    name: label,
     createdAt: now,
     updatedAt: now,
     status: 'analyzed',

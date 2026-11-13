@@ -39,6 +39,18 @@ function fixture(tree) {
   check('swift → screens found', a.screens.includes('ContentView') && a.screens.includes('ProfileView'), a.screens.join(','));
 }
 
+/* XcodeGen project */
+{
+  const dir = fixture({
+    'project.yml': 'name: HelloOpenmgz\noptions:\n  bundleIdPrefix: com.openmgz\n',
+    'Sources/ContentView.swift': 'struct ContentView: View { var body: some View { Text("hi") } }',
+  });
+  const a = analyzeProject(dir);
+  check('xcodegen → xcode-build', a.strategy === 'xcode-build', a.strategy);
+  check('xcodegen → scheme from spec', a.bundleHints.scheme === 'HelloOpenmgz', a.bundleHints.scheme);
+  check('xcodegen → supported', a.supported === true);
+}
+
 /* Flutter */
 {
   const dir = fixture({ 'pubspec.yaml': 'name: app\ndependencies:\n  flutter:\n    sdk: flutter\n', 'lib/main.dart': 'void main(){}' });

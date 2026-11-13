@@ -186,6 +186,18 @@ export function analyzeProject(dir) {
     reason = 'Existing Xcode project — it will be built as-is, without rewriting the app.';
     evidence.push({ file: projPath, note: `Xcode ${xcodeproj ? 'project' : 'workspace'} found` });
     if (podfile) evidence.push({ file: 'Podfile', note: 'CocoaPods dependencies present' });
+  } else if (fileSet.has('project.yml') && files.some((f) => f.rel.endsWith('.swift'))) {
+    type = 'swiftui';
+    stack.push('SwiftUI', 'XcodeGen');
+    strategy = 'xcode-build';
+    supported = true;
+    confidence = 0.9;
+    reason = 'XcodeGen spec with Swift sources — the Xcode project is generated in CI and archived as-is.';
+    const spec = readText(path.join(dir, 'project.yml'), 20_000);
+    const nameMatch = /^name:\s*(\S+)\s*$/m.exec(spec);
+    if (nameMatch) scheme = nameMatch[1];
+    evidence.push({ file: 'project.yml', note: 'XcodeGen manifest (project generated in CI)' });
+    warnings.push('Bundle identifier and signing come from project.yml — change it there before signing with your own profile.');
   } else if (fileSet.has('Package.swift')) {
     type = 'swiftpm';
     stack.push('Swift Package Manager');
